@@ -14,9 +14,11 @@ set(HEADERS
     qsearchfield.h
     qbutton.h
     qprogressindicatorspinning.h
+    qtoolbartabwidget.h
 )
 
 qt4_wrap_cpp(MOC_SOURCES ${HEADERS})
+qt4_add_resources(GALLERY_RC_SRCS "resources.qrc")
 
 if(APPLE)
     list(APPEND SOURCES
@@ -29,6 +31,7 @@ else()
         qsearchfield_nonmac.cpp
         qbutton_nonmac.cpp
         qprogressindicatorspinning_nonmac.cpp
+        qtoolbartabwidget_nonmac.cpp
     )
     set(RESOURCES
         qsearchfield_nonmac.qrc
@@ -39,7 +42,7 @@ endif()
 
 add_executable(Qocoa
     WIN32 MACOSX_BUNDLE 
-    ${SOURCES} ${MOC_SOURCES} ${RESOURCES_SOURCES}
+    ${SOURCES} ${MOC_SOURCES} ${RESOURCES_SOURCES} ${GALLERY_RC_SRCS}
 )
 target_link_libraries(Qocoa ${QT_LIBRARIES})
 

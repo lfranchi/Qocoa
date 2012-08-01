@@ -9,6 +9,9 @@ class Gallery : public QWidget
 
 public:
     explicit Gallery(QWidget *parent = 0);
+
+public slots:
+    void showTabToolbarWidget();
 };
 
 #endif // WIDGET_H
