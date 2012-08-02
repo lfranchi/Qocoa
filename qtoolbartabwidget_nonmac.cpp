@@ -13,6 +13,7 @@ public:
     QWeakPointer<QToolBar> toolbar;
     QWeakPointer<QStackedWidget> stack;
     QWeakPointer<QFrame> separator;
+    QActionGroup* actionGroup;
 };
 
 QToolbarTabWidget::QToolbarTabWidget(QWidget *parent) :
@@ -29,6 +30,8 @@ QToolbarTabWidget::QToolbarTabWidget(QWidget *parent) :
     d->separator = QWeakPointer<QFrame>(new QFrame(this));
     d->separator.data()->setFrameShape(QFrame::HLine);
     d->separator.data()->setFrameShadow(QFrame::Sunken);
+
+    d->actionGroup = new QActionGroup(this);
 
     connect(d->toolbar.data(), SIGNAL(actionTriggered(QAction*)), this, SLOT(actionTriggered(QAction*)));
 
@@ -53,6 +56,8 @@ void QToolbarTabWidget::addTab(QWidget* page, const QIcon& icon, const QString& 
     QAction* action = new QAction(icon, label, d->toolbar.data());
     action->setCheckable(true);
     action->setToolTip(tooltip);
+
+    d->actionGroup->addAction(action);
 
     d->toolbar.data()->addAction(action);
     d->stack.data()->addWidget(page);

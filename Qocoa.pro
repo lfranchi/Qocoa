@@ -7,6 +7,7 @@ HEADERS += gallery.h \
            qbutton.h \
            qprogressindicatorspinning.h \
            qtoolbartabwidget.h
+
 RESOURCES += resources.qrc
 
 mac {
