@@ -11,7 +11,7 @@ HEADERS += gallery.h \
 RESOURCES += resources.qrc
 
 mac {
-    OBJECTIVE_SOURCES += qsearchfield_mac.mm qbutton_mac.mm qprogressindicatorspinning_mac.mm qtoolbartabwidget_nonmac.cpp
+    OBJECTIVE_SOURCES += qsearchfield_mac.mm qbutton_mac.mm qprogressindicatorspinning_mac.mm qtoolbartabwidget_mac.mm
     LIBS += -framework Foundation -framework Appkit
     QMAKE_CFLAGS += -mmacosx-version-min=10.6
 } else {

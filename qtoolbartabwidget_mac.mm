@@ -20,13 +20,12 @@
  THE SOFTWARE.
  */
 
-#include "qtoolbartabwidget.h"
+#include "QToolbarTabWidget.h"
 
 #include "qocoa_mac.h"
 
 #import <Foundation/NSAutoreleasePool.h>
 #import <AppKit/NSToolbar.h>
-#import <AppKit/NSTabView.h>
 
 #include <QCoreApplication>
 #include <QIcon>
@@ -40,12 +39,12 @@ typedef struct {
     QWidget* page;
 } ItemData;
 
-@interface ToolbarDelegate : NSObject<NSToolbarDelegate>
+@interface ToolbarDelegate : NSObject<NSToolbarDelegate, NSWindowDelegate>
 {
-    QToolbarTabWidgetPrivate *pimpl;
+    QToolbarTabDialogPrivate *pimpl;
 }
 // Internal
--(void)setPrivate:(QToolbarTabWidgetPrivate*)withPimpl;
+-(void)setPrivate:(QToolbarTabDialogPrivate*)withPimpl;
 
 // NSToolbarItem action
 -(void)changePanes:(id)sender;
@@ -55,21 +54,70 @@ typedef struct {
 -(NSArray*) toolbarAllowedItemIdentifiers: (NSToolbar *) toolbar;
 -(NSArray*) toolbarDefaultItemIdentifiers: (NSToolbar *) toolbar;
 -(NSArray*) toolbarSelectableItemIdentifiers: (NSToolbar*)toolbar;
+
+// NSWindowDelegate
+-(NSSize)windowWillResize:(NSWindow *)sender toSize:(NSSize)frameSize;
 @end
 
-class QToolbarTabWidgetPrivate {
+class QToolbarTabDialogPrivate {
 public:
-    QToolbarTabWidgetPrivate() {}
+    QToolbarTabDialogPrivate() : currentPane(NULL), minimumWidthForToolbar(0) {}
     
-    ~QToolbarTabWidgetPrivate() {
+    ~QToolbarTabDialogPrivate() {
         [toolBarDelegate release];
+    }
+    
+    void calculateSize() {
+        NSRect windowFrame = [prefsWindow frame];
+        
+        while ([[toolBar visibleItems] count] < [[toolBar items] count]) {
+            //Each toolbar item is 32x32; we expand by one toolbar item width repeatedly until they all fit
+            windowFrame.origin.x -= 16;
+            windowFrame.size.width += 16;
+            
+            [prefsWindow setFrame:windowFrame display:NO];
+            [prefsWindow setMinSize: windowFrame.size];
+        }
+        minimumWidthForToolbar = windowFrame.size.width;
+
+        
+    }
+    
+    void showPaneWithIdentifier(NSString* ident) {
+//
+//        if (currentPane) {
+//            NSView* oldPane = [panes objectForKey:currentPane];
+//            [oldPane removeFromSuperview];
+//        }
+//        
+//        [prefsWindow makeFirstResponder:nil];
+//        [[prefsWindow contentView] addSubview:[panes objectForKey:ident] positioned:NSWindowAbove relativeTo:nil];
+//
+        [prefsWindow setContentView: [panes objectForKey:ident]];
+        currentPane = ident;
+        
+        resizeCurrentPageToSize([[prefsWindow contentView] frame].size);
+    }
+    
+    void resizeCurrentPageToSize(NSSize frameSize) {
+        
+        [[panes objectForKey:currentPane] setFrameSize:frameSize];
+        
+        const QString curPane = toQString(currentPane);
+        if (items.contains(curPane) && items[curPane].page) {
+            items[curPane].page->resize(frameSize.width, frameSize.height);
+        }
     }
     
     QMap<QString, ItemData> items;
     
+    NSWindow* prefsWindow;
     ToolbarDelegate *toolBarDelegate;
-    NSTabView *tabView;
+    NSMutableDictionary *panes;
     NSToolbar *toolBar;
+    NSString* currentPane;
+    
+    int minimumWidthForToolbar;
 };
 
 
@@ -84,7 +132,7 @@ public:
 	return self;
 }
 
--(void) setPrivate:(QToolbarTabWidgetPrivate *)withPimpl
+-(void) setPrivate:(QToolbarTabDialogPrivate *)withPimpl
 {
     pimpl = withPimpl;
 }
@@ -94,7 +142,8 @@ public:
     if (!pimpl)
         return;
     
-    [pimpl->tabView selectTabViewItemAtIndex:[sender tag]];
+    pimpl->showPaneWithIdentifier([pimpl->toolBar selectedItemIdentifier]);
+    //[pimpl->tabView selectTabViewItemAtIndex:[sender tag]];
 	//[[pimpl->tabView window] setTitle:[baseWindowName stringByAppendingString: [sender label]]];
 	
 	//key = [NSString stringWithFormat: @"%@.prefspanel.recentpage", autosaveName];
@@ -118,7 +167,6 @@ public:
         
         [toolbarItem setLabel:label];
         [toolbarItem setPaletteLabel:label];
-        [toolbarItem setTag:[pimpl->tabView indexOfTabViewItemWithIdentifier:itemIdent]];
         
         [toolbarItem setToolTip:fromQString(data.tooltip)];
         [toolbarItem setImage:fromQPixmap(data.icon)];
@@ -161,16 +209,8 @@ public:
     if (!pimpl)
         return [NSArray array];
     
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    
-    NSMutableArray* defaultItems = [[NSMutableArray alloc] init];
-    
-    for (int i = 0; i < [pimpl->tabView numberOfTabViewItems]; i++) {
-        [defaultItems addObject:[[pimpl->tabView tabViewItemAtIndex:i] identifier]];
-    }
-    
-    [pool drain];
-	return defaultItems;
+    return [[NSMutableArray alloc] initWithArray:[pimpl->panes allKeys]];
+
 }
 
 
@@ -179,128 +219,128 @@ public:
     if (!pimpl)
         return [NSArray array];
     
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    
-    NSMutableArray* selectableItems = [[NSMutableArray alloc] init];
-    
-    Q_FOREACH( const QString& identQStr, pimpl->items.keys())
-        [selectableItems addObject:fromQString(identQStr)];
-    
-    [pool drain];
-    return selectableItems;
+    return [[NSMutableArray alloc] initWithArray:[pimpl->panes allKeys]];
 }
 
+-(NSSize)windowWillResize:(NSWindow *)sender toSize:(NSSize)frameSize
+{
+    if (!pimpl)
+        return frameSize;
+    
+    pimpl->resizeCurrentPageToSize(frameSize);
+    
+    return frameSize;
+}
 @end
 
-QToolbarTabWidget::QToolbarTabWidget(QWidget *parent) :
-    QWidget(parent),
-    d_ptr(new QToolbarTabWidgetPrivate)
+QToolbarTabDialog::QToolbarTabDialog() :
+    pimpl(new QToolbarTabDialogPrivate)
 {
-    Q_D(QToolbarTabWidget);
-    
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     
-    d->tabView = [[NSTabView alloc] init];
-    [d->tabView setTabViewType:NSNoTabsNoBorder];
+    pimpl->panes = [[NSMutableDictionary alloc] init];
     
-    d->toolBar = [[NSToolbar alloc] initWithIdentifier:[NSString stringWithFormat:@"%@.prefspanel.toolbar", fromQString(QCoreApplication::instance()->applicationName())]];
-    [d->toolBar setAllowsUserCustomization: NO];
-    [d->toolBar setAutosavesConfiguration: NO];
-    [d->toolBar setDisplayMode: NSToolbarDisplayModeIconAndLabel];
+    pimpl->prefsWindow = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 350, 200)
+                                           styleMask:NSClosableWindowMask | NSResizableWindowMask | NSTitledWindowMask
+                                           backing:NSBackingStoreBuffered
+                                           defer:NO];
+
+    [pimpl->prefsWindow setReleasedWhenClosed:YES];
+    [pimpl->prefsWindow setTitle:@"Preferences"]; // initial default title
     
-    d->toolBarDelegate = [[ToolbarDelegate alloc] init];
-    [d->toolBarDelegate setPrivate:d_ptr.data()];
+    pimpl->toolBar = [[NSToolbar alloc] initWithIdentifier:[NSString stringWithFormat:@"%@.prefspanel.toolbar", fromQString(QCoreApplication::instance()->applicationName())]];
+    [pimpl->toolBar setAllowsUserCustomization: NO];
+    [pimpl->toolBar setAutosavesConfiguration: NO];
+    [pimpl->toolBar setDisplayMode: NSToolbarDisplayModeIconAndLabel];
     
-    [d->toolBar setDelegate:d->toolBarDelegate];
+    pimpl->toolBarDelegate = [[ToolbarDelegate alloc] init];
+    [pimpl->toolBarDelegate setPrivate:pimpl.data()];
     
-    setupLayout(d->tabView, this);
+    [pimpl->prefsWindow setDelegate:pimpl->toolBarDelegate];
     
-    [[d->tabView window] setToolbar:d->toolBar];
+    [pimpl->toolBar setDelegate:pimpl->toolBarDelegate];
     
+    [pimpl->prefsWindow setToolbar:pimpl->toolBar];
+    
+    pimpl->calculateSize();
+        
+    // For testing only
+//    NSTextView* textEdit = [[NSTextView alloc] initWithFrame:[[pimpl->prefsWindow contentView] frame]];
+//    [textEdit setAutoresizesSubviews:YES];
+//    [textEdit setVerticallyResizable:NO];
+//    [textEdit setHorizontallyResizable:NO];
+//    [textEdit setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+//    NSString* identifier = @"Text Cocoa";
+//    [pimpl->panes setObject:textEdit forKey:identifier];
+//    
+//    ItemData data;
+//    data.icon = QPixmap(":/bookmarks.png");
+//    data.text = "Text Cocoa";
+//    data.tooltip = "Text";
+//    data.page = 0;
+//    pimpl->items.insert("Text Cocoa", data);
+//    [pimpl->toolBar insertItemWithItemIdentifier:identifier atIndex:[[pimpl->toolBar items] count]];
+//    [pimpl->toolBar setSelectedItemIdentifier:identifier];
+//    [[pimpl->prefsWindow contentView] addSubview:textEdit positioned:NSWindowAbove relativeTo:nil];
+//    pimpl->currentPane = identifier;
+//    
+    [pimpl->prefsWindow makeKeyAndOrderFront:nil];
+
     [pool drain];
 }
 
-QToolbarTabWidget::~QToolbarTabWidget()
+QToolbarTabDialog::~QToolbarTabDialog()
 {
     
 }
 
-void QToolbarTabWidget::addTab(QWidget* page, const QPixmap& icon, const QString& label, const QString& tooltip)
+void QToolbarTabDialog::addTab(QWidget* page, const QPixmap& icon, const QString& label, const QString& tooltip)
 {
-    Q_D(QToolbarTabWidget);
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     
-    NSTabViewItem* tabItem = [[NSTabViewItem alloc] initWithIdentifier:fromQString(label)];
-    
-    //NSView* view = reinterpret_cast<NSView*>(page->winId());
-    page->setAttribute(Qt::WA_PaintOnScreen);
-    
+    NSString* identifier = fromQString(label);
     
     QMacNativeWidget* nativeWidget = new QMacNativeWidget;
     nativeWidget->move(0, 0);
     nativeWidget->setPalette(page->palette());
     nativeWidget->setAutoFillBackground(true);
+    
     QVBoxLayout* l = new QVBoxLayout;
+    l->setContentsMargins(2, 2, 2, 2);
+    l->setSpacing(0);
     page->setAttribute(Qt::WA_LayoutUsesWidgetRect);
     l->addWidget(page);
     nativeWidget->setLayout(l);
     
     NSView *nativeView = reinterpret_cast<NSView*>(nativeWidget->winId());
-    [d->tabView setAutoresizesSubviews:YES];
-    
-    
     [nativeView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
- 
-    [nativeView setFrameOrigin:NSZeroPoint];
     [nativeView setAutoresizesSubviews:YES];
-    //[native setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     
-    [d->tabView addSubview:nativeView positioned:NSWindowAbove relativeTo:nil];
-    [tabItem setView:nativeView];
     nativeWidget->show();
-    page->show();
-    
-    [d->tabView addTabViewItem:tabItem];
-    [d->tabView selectTabViewItem:tabItem];
     
     ItemData data;
     data.icon = icon;
     data.text = label;
     data.tooltip = tooltip;
-    data.page = page;
-    d->items.insert(label, data);
+    data.page = nativeWidget;
+    pimpl->items.insert(label, data);
     
-    [d->toolBar insertItemWithItemIdentifier:[tabItem identifier] atIndex:[[d->toolBar items] count]];
-    [d->toolBar setSelectedItemIdentifier:[tabItem identifier]];
+    [pimpl->panes setObject:nativeView forKey:identifier];
     
+    pimpl->showPaneWithIdentifier(identifier);
+    
+    [pimpl->toolBar insertItemWithItemIdentifier:identifier atIndex:[[pimpl->toolBar items] count]];
+    [pimpl->toolBar setSelectedItemIdentifier:identifier];
+    [[pimpl->prefsWindow standardWindowButton:NSWindowZoomButton] setEnabled:NO];
+     
+    pimpl->calculateSize();
     [pool drain];
 }
 
 
-void QToolbarTabWidget::actionTriggered(QAction* action)
+void QToolbarTabDialog::setCurrentIndex(int index)
 {
-    Q_D(QToolbarTabWidget);
+//    [pimpl->tabView selectTabViewItemAtIndex:index];
     
 }
 
-
-void QToolbarTabWidget::setCurrentIndex(int index)
-{
-    Q_D(QToolbarTabWidget);
-    
-    [d->tabView selectTabViewItemAtIndex:index];
-    
-}
-
-QSize QToolbarTabWidget::sizeHint() const
-{
-    Q_D(const QToolbarTabWidget);
-    
-    QSize hint;
-//    hint.setWidth([[d->toolBar vie frame].size.width);
-    const ItemData data = d->items.value(toQString([d->toolBar selectedItemIdentifier]));
-    
-    hint.setHeight(data.page->sizeHint().height());
-    NSLog(@"Returning sizehint height: %f", data.page->sizeHint().height());
-    return hint;
-}

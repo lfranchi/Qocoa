@@ -25,6 +25,7 @@ if(APPLE)
         qsearchfield_mac.mm
         qbutton_mac.mm
         qprogressindicatorspinning_mac.mm
+	qtoolbartabwidget_mac.mm
     )
 else()
     list(APPEND SOURCES

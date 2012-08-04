@@ -1,31 +1,27 @@
 #ifndef QTOOLBARTABWIDGET_H
 #define QTOOLBARTABWIDGET_H
 
+#include <QScopedPointer>
 #include <QWidget>
 #include <QScopedPointer>
 
-class QToolbarTabWidgetPrivate;
+class QToolbarTabDialogPrivate;
 
 class QAction;
 
-class QToolbarTabWidget : public QWidget
+class QToolbarTabDialog
 {
-    Q_OBJECT
 public:
-    explicit QToolbarTabWidget(QWidget *parent);
-    virtual ~QToolbarTabWidget();
+    QToolbarTabDialog();
+    virtual ~QToolbarTabDialog();
 
-    void addTab(QWidget* page, const QIcon& icon, const QString& label, const QString& tooltip = QString());
+    void addTab(QWidget* page, const QPixmap& icon, const QString& label, const QString& tooltip = QString());
 
-public slots:
+//    QSize sizeHint() const;
     void setCurrentIndex(int index);
 
 private:
-    const QScopedPointer<QToolbarTabWidgetPrivate> d_ptr;
-    Q_DECLARE_PRIVATE(QToolbarTabWidget)
-
-private slots:
-    void actionTriggered(QAction*);
+    QScopedPointer<QToolbarTabDialogPrivate> pimpl;
 };
 
 #endif // QTOOLBARTABWIDGET_H

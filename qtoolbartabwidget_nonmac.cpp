@@ -47,7 +47,7 @@ QToolbarTabWidget::~QToolbarTabWidget()
 
 }
 
-void QToolbarTabWidget::addTab(QWidget* page, const QIcon& icon, const QString& label, const QString& tooltip)
+void QToolbarTabWidget::addTab(QWidget* page, const QPixmap& icon, const QString& label, const QString& tooltip)
 {
     Q_D(QToolbarTabWidget);
     if (d->toolbar.isNull() || d->stack.isNull())
