@@ -12,7 +12,7 @@ class QAction;
 /**
  Dialog with a toolbar that behaves like a tab widget.
 
- Note that on OS X there are no OK/Cancel dialogs, every setting should be applied immediately.
+ Note that on OS X there are no OK/Cancel buttons, every setting should be applied immediately.
  The accepted() signal will be emitted on close/hide regardless.
  */
 class QToolbarTabDialog : public QObject
@@ -22,6 +22,10 @@ public:
     QToolbarTabDialog();
     virtual ~QToolbarTabDialog();
 
+    /*
+     * If the given widget has a QSizePolicy of Fixed in either direction, the dialog will not be resizable in that
+     * direction.
+     */
     void addTab(QWidget* page, const QPixmap& icon, const QString& label, const QString& tooltip = QString());
 
     void setCurrentIndex(int index);
