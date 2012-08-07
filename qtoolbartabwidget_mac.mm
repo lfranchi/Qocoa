@@ -1,16 +1,16 @@
 /*
  Copyright (C) 2012 by Leo Franchi <lfranchi@kde.org>
- 
+
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
  in the Software without restriction, including without limitation the rights
  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  copies of the Software, and to permit persons to whom the Software is
  furnished to do so, subject to the following conditions:
- 
+
  The above copyright notice and this permission notice shall be included in
  all copies or substantial portions of the Software.
- 
+
  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -88,7 +88,7 @@ public:
                                                           minimumWidthForToolbar(0)
     {
     }
-    
+
     ~QToolbarTabDialogPrivate() {
         [[prefsWindow toolbar] setDelegate:NULL];
         [prefsWindow setToolbar:NULL];
@@ -96,21 +96,21 @@ public:
         [toolBar release];
         [toolBarDelegate release];
     }
-    
+
     void calculateSize() {
         NSRect windowFrame = [prefsWindow frame];
-        
+
         while ([[toolBar visibleItems] count] < [[toolBar items] count]) {
             //Each toolbar item is 32x32; we expand by one toolbar item width repeatedly until they all fit
             windowFrame.origin.x -= 16;
             windowFrame.size.width += 16;
-            
+
             [prefsWindow setFrame:windowFrame display:NO];
             [prefsWindow setMinSize: windowFrame.size];
         }
         minimumWidthForToolbar = windowFrame.size.width;
     }
-    
+
     void showPaneWithIdentifier(NSString* ident) {
         NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
 
@@ -189,14 +189,14 @@ public:
 
         [pool drain];
     }
-    
+
     void resizeCurrentPageToSize(NSSize frameSize) {
         const QString curPane = toQString(currentPane);
         if (items.contains(curPane) && items[curPane].nativeWidget) {
             items[curPane].nativeWidget->resize(frameSize.width, frameSize.height);
         }
     }
-    
+
     void emitAccepted() {
         if (q.isNull())
             return;
@@ -205,7 +205,7 @@ public:
     }
 
     QWeakPointer<QToolbarTabDialog> q;
-    
+
     NSWindow* prefsWindow;
     ToolbarDelegate *toolBarDelegate;
     QMap<QString, ItemData> items;
@@ -213,7 +213,7 @@ public:
     NSMutableDictionary *panes;
     NSToolbar *toolBar;
     NSString* currentPane;
-    
+
     int minimumWidthForToolbar;
 };
 
@@ -222,11 +222,11 @@ public:
 
 -(id) init {
     if( self = [super init] )
-	{
-		pimpl = nil;
-	}
-	
-	return self;
+    {
+        pimpl = nil;
+    }
+
+    return self;
 }
 
 -(void) setPrivate:(QToolbarTabDialogPrivate *)withPimpl
@@ -239,7 +239,7 @@ public:
     Q_UNUSED(sender);
     if (!pimpl)
         return;
-    
+
     pimpl->showPaneWithIdentifier([pimpl->toolBar selectedItemIdentifier]);
 }
 
@@ -249,27 +249,27 @@ public:
     Q_UNUSED(willBeInserted);
     if (!pimpl)
         return nil;
-    
+
     NSToolbarItem   *toolbarItem = [[[NSToolbarItem alloc] initWithItemIdentifier: itemIdent] autorelease];
-	const QString identQStr = toQString(itemIdent);
+    const QString identQStr = toQString(itemIdent);
     if (pimpl->items.contains(identQStr))
     {
         ItemData data = pimpl->items[identQStr];
         NSString* label = fromQString(data.text);
-        
+
         [toolbarItem setLabel:label];
         [toolbarItem setPaletteLabel:label];
-        
+
         [toolbarItem setToolTip:fromQString(data.tooltip)];
         [toolbarItem setImage:fromQPixmap(data.icon)];
-        
+
         [toolbarItem setTarget: self];
         [toolbarItem setAction: @selector(changePanes:)];
 
     } else {
         toolbarItem = nil;
     }
-	
+
     return toolbarItem;
 }
 
@@ -279,16 +279,16 @@ public:
     if (!pimpl)
         return [NSArray array];
 
-	NSMutableArray* allowedItems = [[[NSMutableArray alloc] init] autorelease];
-    
+    NSMutableArray* allowedItems = [[[NSMutableArray alloc] init] autorelease];
+
     Q_FOREACH( const QString& identQStr, pimpl->items.keys())
         [allowedItems addObject:fromQString(identQStr)];
-    
-	[allowedItems addObjectsFromArray:[NSArray arrayWithObjects:NSToolbarSeparatorItemIdentifier,
+
+    [allowedItems addObjectsFromArray:[NSArray arrayWithObjects:NSToolbarSeparatorItemIdentifier,
                                         NSToolbarSpaceItemIdentifier, NSToolbarFlexibleSpaceItemIdentifier,
                                         NSToolbarCustomizeToolbarItemIdentifier, nil] ];
 
-	return allowedItems;
+    return allowedItems;
 }
 
 
@@ -297,7 +297,7 @@ public:
     Q_UNUSED(toolbar);
     if (!pimpl)
         return [NSArray array];
-    
+
     return [[[NSMutableArray alloc] initWithArray:[pimpl->panes allKeys]] autorelease];
 
 }
@@ -308,7 +308,7 @@ public:
     Q_UNUSED(toolbar);
     if (!pimpl)
         return [NSArray array];
-    
+
     return [[[NSMutableArray alloc] initWithArray:[pimpl->panes allKeys]] autorelease];
 }
 
@@ -317,9 +317,9 @@ public:
     Q_UNUSED(sender);
     if (!pimpl)
         return frameSize;
-    
+
     pimpl->resizeCurrentPageToSize(frameSize);
-    
+
     return frameSize;
 }
 
@@ -336,9 +336,9 @@ QToolbarTabDialog::QToolbarTabDialog() :
     pimpl(new QToolbarTabDialogPrivate(this))
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    
+
     pimpl->panes = [[NSMutableDictionary alloc] init];
-    
+
     pimpl->prefsWindow = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 350, 200)
                                            styleMask:NSClosableWindowMask | NSResizableWindowMask | NSTitledWindowMask
                                            backing:NSBackingStoreBuffered
@@ -346,18 +346,18 @@ QToolbarTabDialog::QToolbarTabDialog() :
 
     [pimpl->prefsWindow setReleasedWhenClosed:NO];
     [pimpl->prefsWindow setTitle:@"Preferences"]; // initial default title
-    
+
     pimpl->toolBar = [[NSToolbar alloc] initWithIdentifier:[NSString stringWithFormat:@"%@.prefspanel.toolbar", fromQString(QCoreApplication::instance()->applicationName())]];
     [pimpl->toolBar setAllowsUserCustomization: NO];
     [pimpl->toolBar setAutosavesConfiguration: NO];
     [pimpl->toolBar setDisplayMode: NSToolbarDisplayModeIconAndLabel];
-    
+
     pimpl->toolBarDelegate = [[ToolbarDelegate alloc] init];
     [pimpl->toolBarDelegate setPrivate:pimpl.data()];
-    
+
     [pimpl->prefsWindow setDelegate:pimpl->toolBarDelegate];
     [pimpl->toolBar setDelegate:pimpl->toolBarDelegate];
-    
+
     [pimpl->prefsWindow setToolbar:pimpl->toolBar];
 
     [pool drain];
@@ -370,27 +370,27 @@ QToolbarTabDialog::~QToolbarTabDialog()
 void QToolbarTabDialog::addTab(QWidget* page, const QPixmap& icon, const QString& label, const QString& tooltip)
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    
+
     NSString* identifier = fromQString(label);
-    
+
     QMacNativeWidget* nativeWidget = new QMacNativeWidget;
     nativeWidget->move(0, 0);
     nativeWidget->setPalette(page->palette());
     nativeWidget->setAutoFillBackground(true);
-    
+
     QVBoxLayout* l = new QVBoxLayout;
     l->setContentsMargins(2, 2, 2, 2);
     l->setSpacing(0);
     page->setAttribute(Qt::WA_LayoutUsesWidgetRect);
     l->addWidget(page);
     nativeWidget->setLayout(l);
-    
+
     NSView *nativeView = reinterpret_cast<NSView*>(nativeWidget->winId());
     [nativeView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [nativeView setAutoresizesSubviews:YES];
-    
+
     nativeWidget->show();
-    
+
     ItemData data;
     data.icon = icon;
     data.text = label;
@@ -398,15 +398,15 @@ void QToolbarTabDialog::addTab(QWidget* page, const QPixmap& icon, const QString
     data.nativeWidget = nativeWidget;
     data.page = page;
     pimpl->items.insert(label, data);
-    
+
     [pimpl->panes setObject:nativeView forKey:identifier];
-    
+
     pimpl->showPaneWithIdentifier(identifier);
-    
+
     [pimpl->toolBar insertItemWithItemIdentifier:identifier atIndex:[[pimpl->toolBar items] count]];
     [pimpl->toolBar setSelectedItemIdentifier:identifier];
     [[pimpl->prefsWindow standardWindowButton:NSWindowZoomButton] setEnabled:NO];
-     
+
     pimpl->calculateSize();
     [pool drain];
 }
@@ -432,8 +432,8 @@ void QToolbarTabDialog::hide()
     Q_ASSERT(pimpl);
     if (!pimpl)
         return;
-    
-	[pimpl->prefsWindow close];
+
+    [pimpl->prefsWindow close];
     emit accepted();
 }
 
