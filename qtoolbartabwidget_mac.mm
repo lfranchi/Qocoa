@@ -90,6 +90,9 @@ public:
     }
 
     ~QToolbarTabDialogPrivate() {
+        // unset the delegate and toolbar from the window and manually release them
+        // otherwise, for some reason the old delegate is laying around when we
+        // create a new NSWindow
         [[prefsWindow toolbar] setDelegate:NULL];
         [prefsWindow setToolbar:NULL];
         [prefsWindow release];
