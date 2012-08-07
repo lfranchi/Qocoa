@@ -3,6 +3,8 @@
 
 #include <QWidget>
 
+class QToolbarTabDialog;
+
 class Gallery : public QWidget
 {
     Q_OBJECT
@@ -12,6 +14,10 @@ public:
 
 public slots:
     void showTabToolbarWidget();
+    void tabToolbarWidgetHidden();
+
+private:
+    QToolbarTabDialog* m_toolbarTabDialog;
 };
 
 #endif // WIDGET_H

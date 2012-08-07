@@ -32,12 +32,33 @@
 #include <QMap>
 #include <QUuid>
 #include <QMacNativeWidget>
+#include <QPointer>
 
 typedef struct {
     QPixmap icon;
     QString text, tooltip;
+    QMacNativeWidget* nativeWidget;
     QWidget* page;
 } ItemData;
+
+
+CGFloat ToolbarHeightForWindow(NSWindow *window)
+{
+    NSToolbar *toolbar;
+    CGFloat toolbarHeight = 0.0f;
+    NSRect windowFrame;
+
+    toolbar = [window toolbar];
+
+    if(toolbar && [toolbar isVisible])
+    {
+        windowFrame = [NSWindow contentRectForFrameRect:[window frame]
+                                              styleMask:[window styleMask]];
+        toolbarHeight = NSHeight(windowFrame) - NSHeight([[window contentView] frame]);
+    }
+
+    return toolbarHeight;
+}
 
 @interface ToolbarDelegate : NSObject<NSToolbarDelegate, NSWindowDelegate>
 {
@@ -57,13 +78,22 @@ typedef struct {
 
 // NSWindowDelegate
 -(NSSize)windowWillResize:(NSWindow *)sender toSize:(NSSize)frameSize;
+-(void)windowWillClose:(NSNotification *)notification;
 @end
 
 class QToolbarTabDialogPrivate {
 public:
-    QToolbarTabDialogPrivate() : currentPane(NULL), minimumWidthForToolbar(0) {}
+    QToolbarTabDialogPrivate(QToolbarTabDialog* dialog) : q(dialog),
+                                                          currentPane(NULL),
+                                                          minimumWidthForToolbar(0)
+    {
+    }
     
     ~QToolbarTabDialogPrivate() {
+        [[prefsWindow toolbar] setDelegate:NULL];
+        [prefsWindow setToolbar:NULL];
+        [prefsWindow release];
+        [toolBar release];
         [toolBarDelegate release];
     }
     
@@ -79,40 +109,107 @@ public:
             [prefsWindow setMinSize: windowFrame.size];
         }
         minimumWidthForToolbar = windowFrame.size.width;
-
-        
     }
     
     void showPaneWithIdentifier(NSString* ident) {
-//
-//        if (currentPane) {
-//            NSView* oldPane = [panes objectForKey:currentPane];
-//            [oldPane removeFromSuperview];
-//        }
-//        
-//        [prefsWindow makeFirstResponder:nil];
-//        [[prefsWindow contentView] addSubview:[panes objectForKey:ident] positioned:NSWindowAbove relativeTo:nil];
-//
+        NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
+
+        const QString identStr = toQString(ident);
+        Q_ASSERT(items.contains(identStr));
+        if (!items.contains(identStr))
+            return;
+
+        QWidget* newWidget = items[identStr].nativeWidget;
+        Q_ASSERT(newWidget);
+        if (!newWidget)
+            return;
+
+        QWidget* newPage = items[identStr].page;
+        Q_ASSERT(newPage);
+        if (!newPage)
+            return;
+
+        // Clear first responder on window and set a temporary NSView on the window
+        // while we change the widget out underneath
+        [prefsWindow makeFirstResponder:nil];
+
+        NSView *tempView = [[NSView alloc] initWithFrame:[[prefsWindow contentView] frame]];
+        [prefsWindow setContentView:tempView];
+        [tempView release];
+
+        QSize sizeToUse = newPage->sizeHint();
+        if (sizeToUse.isNull())
+            sizeToUse = newPage->size();
+
+        const int spacing = 4;
+
+        [prefsWindow setMinSize:NSMakeSize(sizeToUse.width(), sizeToUse.height())];
+
+        // Make room for the new view
+        NSRect newFrame = [prefsWindow frame];
+        newFrame.size.height = sizeToUse.height() + ([prefsWindow frame].size.height - [[prefsWindow contentView] frame].size.height) + spacing;
+        newFrame.size.width = sizeToUse.width() + spacing;
+
+        //Ensure the full toolbar still fits
+        if (newFrame.size.width < minimumWidthForToolbar) newFrame.size.width =  minimumWidthForToolbar;
+
+        // Preserve upper left point of window during resize.
+        newFrame.origin.y += ([[prefsWindow contentView] frame].size.height - sizeToUse.height()) - spacing;
+
+        [prefsWindow setFrame:newFrame display:YES animate:YES];
+
         [prefsWindow setContentView: [panes objectForKey:ident]];
         currentPane = ident;
-        
+
+        // Resize the Qt widget immediately as well
         resizeCurrentPageToSize([[prefsWindow contentView] frame].size);
+
+        NSSize minSize = [prefsWindow frame].size;
+        minSize.height -= ToolbarHeightForWindow(prefsWindow);
+
+        [prefsWindow setMinSize:minSize];
+
+        BOOL canResize = YES;
+        NSSize maxSize = NSMakeSize(FLT_MAX, FLT_MAX);
+
+        if (newPage->sizePolicy().horizontalPolicy() == QSizePolicy::Fixed) {
+            canResize = NO;
+            maxSize.width = minSize.width;
+        }
+        if (newPage->sizePolicy().verticalPolicy() == QSizePolicy::Fixed) {
+            canResize = NO;
+            maxSize.height = minSize.height;
+        }
+
+
+        [prefsWindow setMaxSize:maxSize];
+        [prefsWindow setShowsResizeIndicator:canResize];
+
+        [prefsWindow setTitle:ident];
+
+        [pool drain];
     }
     
     void resizeCurrentPageToSize(NSSize frameSize) {
-        
-        [[panes objectForKey:currentPane] setFrameSize:frameSize];
-        
         const QString curPane = toQString(currentPane);
-        if (items.contains(curPane) && items[curPane].page) {
-            items[curPane].page->resize(frameSize.width, frameSize.height);
+        if (items.contains(curPane) && items[curPane].nativeWidget) {
+            items[curPane].nativeWidget->resize(frameSize.width, frameSize.height);
         }
     }
     
-    QMap<QString, ItemData> items;
+    void emitAccepted() {
+        if (q.isNull())
+            return;
+
+        q.data()->accepted();
+    }
+
+    QWeakPointer<QToolbarTabDialog> q;
     
     NSWindow* prefsWindow;
     ToolbarDelegate *toolBarDelegate;
+    QMap<QString, ItemData> items;
+
     NSMutableDictionary *panes;
     NSToolbar *toolBar;
     NSString* currentPane;
@@ -139,26 +236,21 @@ public:
 
 -(void)changePanes:(id)sender
 {
+    Q_UNUSED(sender);
     if (!pimpl)
         return;
     
     pimpl->showPaneWithIdentifier([pimpl->toolBar selectedItemIdentifier]);
-    //[pimpl->tabView selectTabViewItemAtIndex:[sender tag]];
-	//[[pimpl->tabView window] setTitle:[baseWindowName stringByAppendingString: [sender label]]];
-	
-	//key = [NSString stringWithFormat: @"%@.prefspanel.recentpage", autosaveName];
-	//[[NSUserDefaults standardUserDefaults] setInteger:[sender tag] forKey:key];
-
 }
 
 -(NSToolbarItem *) toolbar: (NSToolbar *)toolbar itemForItemIdentifier: (NSString *) itemIdent willBeInsertedIntoToolbar:(BOOL) willBeInserted
 {
+    Q_UNUSED(toolbar);
+    Q_UNUSED(willBeInserted);
     if (!pimpl)
         return nil;
     
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    
-    NSToolbarItem   *toolbarItem = [[NSToolbarItem alloc] initWithItemIdentifier: itemIdent];
+    NSToolbarItem   *toolbarItem = [[[NSToolbarItem alloc] initWithItemIdentifier: itemIdent] autorelease];
 	const QString identQStr = toQString(itemIdent);
     if (pimpl->items.contains(identQStr))
     {
@@ -178,18 +270,16 @@ public:
         toolbarItem = nil;
     }
 	
-    [pool drain];
     return toolbarItem;
 }
 
 -(NSArray*) toolbarAllowedItemIdentifiers: (NSToolbar *) toolbar
 {
+    Q_UNUSED(toolbar);
     if (!pimpl)
         return [NSArray array];
-    
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    
-	NSMutableArray* allowedItems = [[NSMutableArray alloc] init];
+
+	NSMutableArray* allowedItems = [[[NSMutableArray alloc] init] autorelease];
     
     Q_FOREACH( const QString& identQStr, pimpl->items.keys())
         [allowedItems addObject:fromQString(identQStr)];
@@ -197,33 +287,34 @@ public:
 	[allowedItems addObjectsFromArray:[NSArray arrayWithObjects:NSToolbarSeparatorItemIdentifier,
                                         NSToolbarSpaceItemIdentifier, NSToolbarFlexibleSpaceItemIdentifier,
                                         NSToolbarCustomizeToolbarItemIdentifier, nil] ];
-	
-    [pool drain];
-    
+
 	return allowedItems;
 }
 
 
 -(NSArray*) toolbarDefaultItemIdentifiers: (NSToolbar *) toolbar
 {
+    Q_UNUSED(toolbar);
     if (!pimpl)
         return [NSArray array];
     
-    return [[NSMutableArray alloc] initWithArray:[pimpl->panes allKeys]];
+    return [[[NSMutableArray alloc] initWithArray:[pimpl->panes allKeys]] autorelease];
 
 }
 
 
 -(NSArray*) toolbarSelectableItemIdentifiers: (NSToolbar*)toolbar
 {
+    Q_UNUSED(toolbar);
     if (!pimpl)
         return [NSArray array];
     
-    return [[NSMutableArray alloc] initWithArray:[pimpl->panes allKeys]];
+    return [[[NSMutableArray alloc] initWithArray:[pimpl->panes allKeys]] autorelease];
 }
 
 -(NSSize)windowWillResize:(NSWindow *)sender toSize:(NSSize)frameSize
 {
+    Q_UNUSED(sender);
     if (!pimpl)
         return frameSize;
     
@@ -231,10 +322,18 @@ public:
     
     return frameSize;
 }
+
+-(void)windowWillClose:(NSNotification *)notification
+{
+    Q_UNUSED(notification);
+
+    pimpl->emitAccepted();
+}
 @end
 
 QToolbarTabDialog::QToolbarTabDialog() :
-    pimpl(new QToolbarTabDialogPrivate)
+    QObject(0),
+    pimpl(new QToolbarTabDialogPrivate(this))
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     
@@ -245,7 +344,7 @@ QToolbarTabDialog::QToolbarTabDialog() :
                                            backing:NSBackingStoreBuffered
                                            defer:NO];
 
-    [pimpl->prefsWindow setReleasedWhenClosed:YES];
+    [pimpl->prefsWindow setReleasedWhenClosed:NO];
     [pimpl->prefsWindow setTitle:@"Preferences"]; // initial default title
     
     pimpl->toolBar = [[NSToolbar alloc] initWithIdentifier:[NSString stringWithFormat:@"%@.prefspanel.toolbar", fromQString(QCoreApplication::instance()->applicationName())]];
@@ -257,41 +356,15 @@ QToolbarTabDialog::QToolbarTabDialog() :
     [pimpl->toolBarDelegate setPrivate:pimpl.data()];
     
     [pimpl->prefsWindow setDelegate:pimpl->toolBarDelegate];
-    
     [pimpl->toolBar setDelegate:pimpl->toolBarDelegate];
     
     [pimpl->prefsWindow setToolbar:pimpl->toolBar];
-    
-    pimpl->calculateSize();
-        
-    // For testing only
-//    NSTextView* textEdit = [[NSTextView alloc] initWithFrame:[[pimpl->prefsWindow contentView] frame]];
-//    [textEdit setAutoresizesSubviews:YES];
-//    [textEdit setVerticallyResizable:NO];
-//    [textEdit setHorizontallyResizable:NO];
-//    [textEdit setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-//    NSString* identifier = @"Text Cocoa";
-//    [pimpl->panes setObject:textEdit forKey:identifier];
-//    
-//    ItemData data;
-//    data.icon = QPixmap(":/bookmarks.png");
-//    data.text = "Text Cocoa";
-//    data.tooltip = "Text";
-//    data.page = 0;
-//    pimpl->items.insert("Text Cocoa", data);
-//    [pimpl->toolBar insertItemWithItemIdentifier:identifier atIndex:[[pimpl->toolBar items] count]];
-//    [pimpl->toolBar setSelectedItemIdentifier:identifier];
-//    [[pimpl->prefsWindow contentView] addSubview:textEdit positioned:NSWindowAbove relativeTo:nil];
-//    pimpl->currentPane = identifier;
-//    
-    [pimpl->prefsWindow makeKeyAndOrderFront:nil];
 
     [pool drain];
 }
 
 QToolbarTabDialog::~QToolbarTabDialog()
 {
-    
 }
 
 void QToolbarTabDialog::addTab(QWidget* page, const QPixmap& icon, const QString& label, const QString& tooltip)
@@ -322,7 +395,8 @@ void QToolbarTabDialog::addTab(QWidget* page, const QPixmap& icon, const QString
     data.icon = icon;
     data.text = label;
     data.tooltip = tooltip;
-    data.page = nativeWidget;
+    data.nativeWidget = nativeWidget;
+    data.page = page;
     pimpl->items.insert(label, data);
     
     [pimpl->panes setObject:nativeView forKey:identifier];
@@ -340,7 +414,26 @@ void QToolbarTabDialog::addTab(QWidget* page, const QPixmap& icon, const QString
 
 void QToolbarTabDialog::setCurrentIndex(int index)
 {
-//    [pimpl->tabView selectTabViewItemAtIndex:index];
+    Q_ASSERT(pimpl);
+    if (!pimpl)
+        return;
+
+    [pimpl->toolBar setSelectedItemIdentifier:[[[pimpl->toolBar items] objectAtIndex:index] itemIdentifier]];
+    pimpl->showPaneWithIdentifier([[[pimpl->toolBar items] objectAtIndex:index] itemIdentifier]);
+}
+
+void QToolbarTabDialog::show()
+{
+    [pimpl->prefsWindow makeKeyAndOrderFront:nil];
+}
+
+void QToolbarTabDialog::hide()
+{
+    Q_ASSERT(pimpl);
+    if (!pimpl)
+        return;
     
+	[pimpl->prefsWindow close];
+    emit accepted();
 }
 

@@ -5,13 +5,14 @@
 #include <QDialogButtonBox>
 #include <QIcon>
 #include <QTextEdit>
+#include <QPushButton>
 
 #include "qsearchfield.h"
 #include "qbutton.h"
 #include "qprogressindicatorspinning.h"
 #include "qtoolbartabwidget.h"
 
-Gallery::Gallery(QWidget *parent) : QWidget(parent)
+Gallery::Gallery(QWidget *parent) : QWidget(parent), m_toolbarTabDialog(0)
 {
     setWindowTitle("Qocoa Gallery");
     QVBoxLayout *layout = new QVBoxLayout(this);
@@ -84,44 +85,32 @@ Gallery::Gallery(QWidget *parent) : QWidget(parent)
 }
 
 void Gallery::showTabToolbarWidget() {
-//    QDialog *dialog = new QDialog;
-//    dialog->setLayout(new QVBoxLayout);
-//
-//#ifdef Q_OS_MAC
-//    dialog->layout()->setContentsMargins(0, 0, 0, 0);
-//    dialog->layout()->setSpacing(0);
-//
-//#endif
+    if (!m_toolbarTabDialog) {
+        m_toolbarTabDialog = new QToolbarTabDialog;
+        connect(m_toolbarTabDialog, SIGNAL(accepted()), this, SLOT(tabToolbarWidgetHidden()));
     
-    QToolbarTabDialog* toolbarTabDialog = new QToolbarTabDialog();
+        QSearchField *searchField = new QSearchField(0);
+        m_toolbarTabDialog->addTab(searchField, QPixmap( ":/user-home.png" ), "Home", "Go Home");
 
-    QSearchField *searchField = new QSearchField(0);
-    toolbarTabDialog->addTab(searchField, QPixmap( ":/user-home.png" ), "Home", "Go Home");
+        QButton *b1 = new QButton(0, QButton::Recessed);
+        b1->setText("You've reached the trash");
+        m_toolbarTabDialog->addTab(b1, QPixmap( ":/user-trash.png" ), "Trash", "Trash it. Try me.");
 
-    QButton *b1 = new QButton(0, QButton::Recessed);
-    b1->setText("You've reached the trash");
-    toolbarTabDialog->addTab(b1, QPixmap( ":/user-trash.png" ), "Trash", "Trash it. Try me.");
+        QPushButton *b2 = new QPushButton(0);
+        b2->setText("Search is futile");
+        m_toolbarTabDialog->addTab(b2, QPixmap( ":/bookmarks.png" ), "Bookmarks", "Look for some bookmarks");
 
-    QButton *b2 = new QButton(0, QButton::RegularSquare);
-    b2->setText("Search is futile");
-    toolbarTabDialog->addTab(b2, QPixmap( ":/bookmarks.png" ), "Bookmarks", "Look for some bookmarks");
+        QTextEdit* textEdit = new QTextEdit;
+        textEdit->setText("This is some text!");
+        m_toolbarTabDialog->addTab(textEdit, QPixmap( ":/bookmarks.png" ), "Text", "Some text editing eh?");
 
-    QTextEdit* textEdit = new QTextEdit;
-    textEdit->setText("This is some text!");
-    toolbarTabDialog->addTab(textEdit, QPixmap( ":/bookmarks.png" ), "Text", "Some text editing eh?");
+        m_toolbarTabDialog->setCurrentIndex(0);
+    }
     
-    
-    /*
-    dialog->layout()->addWidget(toolbarTabWidget);
-    QDialogButtonBox *box = new QDialogButtonBox(QDialogButtonBox::Ok, Qt::Horizontal, dialog);
-    connect(box, SIGNAL(accepted()), dialog, SLOT(accept()));
-    dialog->layout()->addWidget(box);
+    m_toolbarTabDialog->show();
+}
 
-    QWeakPointer<QDialog> that(dialog);
-    dialog->setModal(true);
-    dialog->exec();
-
-    if (!that.isNull())
-        delete dialog;
-     */
+void Gallery::tabToolbarWidgetHidden() {
+//    delete m_toolbarTabDialog;
+//    m_toolbarTabDialog = 0;
 }
