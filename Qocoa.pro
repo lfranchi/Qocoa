@@ -1,14 +1,17 @@
 SOURCES += main.cpp\
-           gallery.cpp \
+           gallery.cpp
 
 HEADERS += gallery.h \
            qocoa_mac.h \
            qsearchfield.h \
            qbutton.h \
            qprogressindicatorspinning.h \
+           qtoolbartabwidget.h
+
+RESOURCES += resources.qrc
 
 mac {
-    OBJECTIVE_SOURCES += qsearchfield_mac.mm qbutton_mac.mm qprogressindicatorspinning_mac.mm
+    OBJECTIVE_SOURCES += qsearchfield_mac.mm qbutton_mac.mm qprogressindicatorspinning_mac.mm qtoolbartabwidget_mac.mm
     LIBS += -framework Foundation -framework Appkit
     QMAKE_CFLAGS += -mmacosx-version-min=10.6
 } else {
