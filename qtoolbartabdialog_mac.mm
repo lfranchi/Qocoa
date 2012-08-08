@@ -20,7 +20,7 @@
  THE SOFTWARE.
  */
 
-#include "QToolbarTabWidget.h"
+#include "QToolbarTabDialog.h"
 
 #include "qocoa_mac.h"
 

@@ -6,11 +6,12 @@
 #include <QIcon>
 #include <QTextEdit>
 #include <QPushButton>
+#include <QDebug>
 
 #include "qsearchfield.h"
 #include "qbutton.h"
 #include "qprogressindicatorspinning.h"
-#include "qtoolbartabwidget.h"
+#include "qtoolbartabdialog.h"
 
 Gallery::Gallery(QWidget *parent) : QWidget(parent), m_toolbarTabDialog(0)
 {
