@@ -34,31 +34,35 @@
 #include <QMacNativeWidget>
 #include <QPointer>
 
-typedef struct {
+struct ItemData {
     QPixmap icon;
     QString text, tooltip;
     QMacNativeWidget* nativeWidget;
     QWidget* page;
-} ItemData;
+};
 
+
+namespace {
+
+static const int TOOLBAR_ITEM_WIDTH = 32;
 
 CGFloat ToolbarHeightForWindow(NSWindow *window)
 {
-    NSToolbar *toolbar;
     CGFloat toolbarHeight = 0.0f;
-    NSRect windowFrame;
 
-    toolbar = [window toolbar];
+    NSToolbar *toolbar = toolbar = [window toolbar];
 
     if(toolbar && [toolbar isVisible])
     {
-        windowFrame = [NSWindow contentRectForFrameRect:[window frame]
+        NSRect windowFrame = [NSWindow contentRectForFrameRect:[window frame]
                                               styleMask:[window styleMask]];
         toolbarHeight = NSHeight(windowFrame) - NSHeight([[window contentView] frame]);
     }
 
     return toolbarHeight;
 }
+
+};
 
 @interface ToolbarDelegate : NSObject<NSToolbarDelegate, NSWindowDelegate>
 {
@@ -105,9 +109,9 @@ public:
 
         while ([[toolBar visibleItems] count] < [[toolBar items] count]) {
             //Each toolbar item is 32x32; we expand by one toolbar item width repeatedly until they all fit
-            windowFrame.origin.x -= 16;
-            windowFrame.size.width += 16;
-
+            windowFrame.origin.x -= TOOLBAR_ITEM_WIDTH / 2;
+            windowFrame.size.width += TOOLBAR_ITEM_WIDTH / 2;
+            
             [prefsWindow setFrame:windowFrame display:NO];
             [prefsWindow setMinSize: windowFrame.size];
         }
@@ -140,11 +144,9 @@ public:
         [prefsWindow setContentView:tempView];
         [tempView release];
 
-        QSize sizeToUse = newPage->sizeHint();
-        if (sizeToUse.isNull())
-            sizeToUse = newPage->size();
+        QSize sizeToUse = newPage->sizeHint().isNull() ? newPage->size() : newPage->sizeHint();
 
-        const int spacing = 4;
+        static const int spacing = 4;
 
         [prefsWindow setMinSize:NSMakeSize(sizeToUse.width(), sizeToUse.height())];
 
@@ -257,7 +259,7 @@ public:
     const QString identQStr = toQString(itemIdent);
     if (pimpl->items.contains(identQStr))
     {
-        ItemData data = pimpl->items[identQStr];
+        const ItemData& data = pimpl->items[identQStr];
         NSString* label = fromQString(data.text);
 
         [toolbarItem setLabel:label];
@@ -341,15 +343,18 @@ QToolbarTabDialog::QToolbarTabDialog() :
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
     pimpl->panes = [[NSMutableDictionary alloc] init];
-
-    pimpl->prefsWindow = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 350, 200)
+    
+    static const int defaultWidth = 350;
+    static const int defaultHeight = 200;
+    pimpl->prefsWindow = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, defaultWidth, defaultHeight)
                                            styleMask:NSClosableWindowMask | NSResizableWindowMask | NSTitledWindowMask
                                            backing:NSBackingStoreBuffered
                                            defer:NO];
 
     [pimpl->prefsWindow setReleasedWhenClosed:NO];
-    [pimpl->prefsWindow setTitle:@"Preferences"]; // initial default title
-
+    [pimpl->prefsWindow setTitle:@"Preferences"];
+    
+    // identifier is some app-unique string, since all toolbars in an app share state. make this unique to this app's preferences window
     pimpl->toolBar = [[NSToolbar alloc] initWithIdentifier:[NSString stringWithFormat:@"%@.prefspanel.toolbar", fromQString(QCoreApplication::instance()->applicationName())]];
     [pimpl->toolBar setAllowsUserCustomization: NO];
     [pimpl->toolBar setAutosavesConfiguration: NO];
