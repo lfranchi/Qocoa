@@ -14,7 +14,8 @@ public:
 
 public slots:
     void showTabToolbarWidget();
-    void tabToolbarWidgetHidden();
+    void tabToolbarWidgetAccepted();
+    void tabToolbarWidgetRejected();
 
 private:
     QToolbarTabDialog* m_toolbarTabDialog;

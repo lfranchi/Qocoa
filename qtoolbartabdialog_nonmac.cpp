@@ -1,97 +1,167 @@
-#include "qtoolbartabwidget.h"
+#include "qtoolbartabdialog.h"
 
 #include <QToolBar>
 #include <QStackedWidget>
 #include <QAction>
 #include <QVBoxLayout>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDebug>
 
-class QToolbarTabWidgetPrivate {
+class QToolbarTabDialogPrivate : public QObject {
+    Q_OBJECT
 public:
-    QToolbarTabWidgetPrivate() {}
+    QToolbarTabDialogPrivate(QToolbarTabDialog* qq) : q(qq), layout(0), toolbar(0), rightSpacer(0), stack(0), separator(0), buttons(0), actionGroup(0) {}
+
+public slots:
+    void actionTriggered(QAction* action) {
+        if (dialog.isNull())
+            return;
+
+        const int idx = toolbar->actions().indexOf(action);
+        Q_ASSERT(idx > -1);
+        if (idx < 0)
+            return;
+
+        stack->setCurrentIndex(idx);
+    }
+
+    void accepted() {
+        Q_ASSERT(!dialog.isNull());
+        Q_ASSERT(!q.isNull());
+
+        dialog.data()->hide();
+        emit q.data()->accepted();
+    }
+
+    void rejected() {
+        Q_ASSERT(!dialog.isNull());
+        Q_ASSERT(!q.isNull());
+
+        dialog.data()->hide();
+        emit q.data()->rejected();
+    }
+
+public:
+    QWeakPointer<QDialog> dialog;
+    QWeakPointer<QToolbarTabDialog> q;
 
     QVBoxLayout* layout;
-    QWeakPointer<QToolBar> toolbar;
-    QWeakPointer<QStackedWidget> stack;
-    QWeakPointer<QFrame> separator;
+    QToolBar* toolbar;
+    QAction* rightSpacer;
+    QStackedWidget* stack;
+    QFrame* separator;
+    QDialogButtonBox* buttons;
     QActionGroup* actionGroup;
+
 };
 
-QToolbarTabWidget::QToolbarTabWidget(QWidget *parent) :
-    QWidget(parent),
-    d_ptr(new QToolbarTabWidgetPrivate)
+QToolbarTabDialog::QToolbarTabDialog() :
+    QObject(0),
+    pimpl(new QToolbarTabDialogPrivate(this))
 {
-    Q_D(QToolbarTabWidget);
+    pimpl->dialog = new QDialog;
+    pimpl->dialog.data()->setModal(true);
 
-    d->toolbar = QWeakPointer<QToolBar>(new QToolBar(this));
-    d->toolbar.data()->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    pimpl->toolbar = new QToolBar(pimpl->dialog.data());
+    pimpl->toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 
-    d->stack = QWeakPointer<QStackedWidget>(new QStackedWidget(this));
+    pimpl->stack = new QStackedWidget(pimpl->dialog.data());
 
-    d->separator = QWeakPointer<QFrame>(new QFrame(this));
-    d->separator.data()->setFrameShape(QFrame::HLine);
-    d->separator.data()->setFrameShadow(QFrame::Sunken);
+    pimpl->separator = new QFrame(pimpl->dialog.data());
+    pimpl->separator->setFrameShape(QFrame::HLine);
+    pimpl->separator->setFrameShadow(QFrame::Sunken);
 
-    d->actionGroup = new QActionGroup(this);
+    pimpl->actionGroup = new QActionGroup(pimpl->dialog.data());
 
-    connect(d->toolbar.data(), SIGNAL(actionTriggered(QAction*)), this, SLOT(actionTriggered(QAction*)));
+    connect(pimpl->toolbar, SIGNAL(actionTriggered(QAction*)), pimpl.data(), SLOT(actionTriggered(QAction*)));
 
-    d->layout = new QVBoxLayout;
-    d->layout->addWidget(d->toolbar.data());
-    d->layout->addWidget(d->separator.data());
-    d->layout->addWidget(d->stack.data());
-    setLayout(d->layout);
+    pimpl->buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, pimpl->dialog.data());
+    connect(pimpl->buttons, SIGNAL(accepted()), pimpl->dialog.data(), SLOT(accept()));
+    connect(pimpl->buttons, SIGNAL(rejected()), pimpl->dialog.data(), SLOT(reject()));
+
+    connect(pimpl->dialog.data(), SIGNAL(accepted()), pimpl.data(), SLOT(accepted()));
+    connect(pimpl->dialog.data(), SIGNAL(rejected()), pimpl.data(), SLOT(rejected()));
+
+    QWidget* leftSpacer = new QWidget(pimpl->toolbar);
+    leftSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    QWidget* rightSpacer = new QWidget(pimpl->toolbar);
+    rightSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+
+    pimpl->toolbar->addWidget(leftSpacer);
+    pimpl->rightSpacer =  pimpl->toolbar->addWidget(rightSpacer);
+
+    pimpl->layout = new QVBoxLayout;
+    pimpl->layout->addWidget(pimpl->toolbar);
+    pimpl->layout->addWidget(pimpl->separator);
+    pimpl->layout->addWidget(pimpl->stack);
+    pimpl->layout->addWidget(pimpl->buttons);
+    pimpl->dialog.data()->setLayout(pimpl->layout);
 }
 
-QToolbarTabWidget::~QToolbarTabWidget()
+QToolbarTabDialog::~QToolbarTabDialog()
 {
-
+    if (pimpl && !pimpl->dialog.isNull()) {
+        delete pimpl->dialog.data();
+    }
 }
 
-void QToolbarTabWidget::addTab(QWidget* page, const QPixmap& icon, const QString& label, const QString& tooltip)
+void QToolbarTabDialog::addTab(QWidget* page, const QPixmap& icon, const QString& label, const QString& tooltip)
 {
-    Q_D(QToolbarTabWidget);
-    if (d->toolbar.isNull() || d->stack.isNull())
+    Q_ASSERT(pimpl);
+    if (!pimpl)
         return;
 
-    QAction* action = new QAction(icon, label, d->toolbar.data());
+    pimpl->toolbar->removeAction(pimpl->rightSpacer);
+
+    QAction* action = new QAction(icon, label, pimpl->toolbar);
     action->setCheckable(true);
     action->setToolTip(tooltip);
 
-    d->actionGroup->addAction(action);
+    pimpl->actionGroup->addAction(action);
 
-    d->toolbar.data()->addAction(action);
-    d->stack.data()->addWidget(page);
+    pimpl->toolbar->addAction(action);
+    pimpl->stack->addWidget(page);
+
+    pimpl->toolbar->addAction(pimpl->rightSpacer);
 }
 
-
-void QToolbarTabWidget::actionTriggered(QAction* action)
+void QToolbarTabDialog::setCurrentIndex(int index)
 {
-    Q_D(QToolbarTabWidget);
-    if (d->toolbar.isNull() || d->stack.isNull())
+    Q_ASSERT(pimpl);
+    if (!pimpl || pimpl->dialog.isNull())
         return;
 
-    const int idx = d->toolbar.data()->actions().indexOf(action);
-    Q_ASSERT(idx > -1);
-    if (idx < 0)
+
+    Q_ASSERT(index < pimpl->toolbar->actions().length());
+    Q_ASSERT(index < pimpl->stack->count());
+    if (index < 0 || index > pimpl->toolbar->actions().length())
+        return;
+    if (index > pimpl->stack->count())
         return;
 
-    d->stack.data()->setCurrentIndex(idx);
+    if (pimpl->stack->currentIndex() != index)
+        pimpl->stack->setCurrentIndex(index);
 }
 
-
-void QToolbarTabWidget::setCurrentIndex(int index)
+void QToolbarTabDialog::show()
 {
-    Q_D(QToolbarTabWidget);
-    if (d->toolbar.isNull() || d->stack.isNull())
+    Q_ASSERT(pimpl);
+    Q_ASSERT(!pimpl->dialog.isNull());
+    if (!pimpl || pimpl->dialog.isNull())
         return;
 
-    Q_ASSERT(index < d->toolbar.data()->actions().length());
-    Q_ASSERT(index < d->stack.data()->count());
-    if (index < 0 || index > d->toolbar.data()->actions().length())
-        return;
-    if (index > d->stack.data()->count())
-        return;
-
-    if (d->stack.data()->currentIndex() != index)
-        d->stack.data()->setCurrentIndex(index);
+    pimpl->dialog.data()->show();
 }
+
+void QToolbarTabDialog::hide()
+{
+    Q_ASSERT(pimpl);
+    Q_ASSERT(!pimpl->dialog.isNull());
+    if (!pimpl || pimpl->dialog.isNull())
+        return;
+
+    pimpl->dialog.data()->hide();
+}
+
+#include "moc_qtoolbartabdialog_nonmac.cpp"

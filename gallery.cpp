@@ -88,7 +88,8 @@ Gallery::Gallery(QWidget *parent) : QWidget(parent), m_toolbarTabDialog(0)
 void Gallery::showTabToolbarWidget() {
     if (!m_toolbarTabDialog) {
         m_toolbarTabDialog = new QToolbarTabDialog;
-        connect(m_toolbarTabDialog, SIGNAL(accepted()), this, SLOT(tabToolbarWidgetHidden()));
+        connect(m_toolbarTabDialog, SIGNAL(accepted()), this, SLOT(tabToolbarWidgetAccepted()));
+        connect(m_toolbarTabDialog, SIGNAL(rejected()), this, SLOT(tabToolbarWidgetRejected()));
     
         QSearchField *searchField = new QSearchField(0);
         m_toolbarTabDialog->addTab(searchField, QPixmap( ":/user-home.png" ), "Home", "Go Home");
@@ -111,7 +112,14 @@ void Gallery::showTabToolbarWidget() {
     m_toolbarTabDialog->show();
 }
 
-void Gallery::tabToolbarWidgetHidden() {
+void Gallery::tabToolbarWidgetAccepted() {
+    m_toolbarTabDialog->deleteLater();
+    m_toolbarTabDialog = 0;
+    qDebug() << "accepted!";
+}
+
+void Gallery::tabToolbarWidgetRejected() {
 //    delete m_toolbarTabDialog;
 //    m_toolbarTabDialog = 0;
+    qDebug() << "Rejected!";
 }
