@@ -7,6 +7,7 @@
 #include <QTextEdit>
 #include <QPushButton>
 #include <QDebug>
+#include <QListWidget>
 
 #include "qsearchfield.h"
 #include "qbutton.h"
@@ -105,6 +106,12 @@ void Gallery::showTabToolbarWidget() {
         QTextEdit* textEdit = new QTextEdit;
         textEdit->setText("This is some text!");
         m_toolbarTabDialog->addTab(textEdit, QPixmap( ":/bookmarks.png" ), "Text", "Some text editing eh?");
+
+        QListWidget* lw = new QListWidget;
+        for (int i = 0; i < 30; ++i) {
+            lw->addItem("1213123123 12 21 2 2 " + i);
+        }
+        m_toolbarTabDialog->addTab(lw, QPixmap( ":/user-home.png" ), "List", "Some lists!" );
 
         m_toolbarTabDialog->setCurrentIndex(0);
     }
