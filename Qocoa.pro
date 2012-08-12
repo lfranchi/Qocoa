@@ -9,6 +9,7 @@ HEADERS += gallery.h \
            qtoolbartabdialog.h
 
 RESOURCES += resources.qrc
+CONFIG += debug
 
 mac {
     OBJECTIVE_SOURCES += qsearchfield_mac.mm qbutton_mac.mm qprogressindicatorspinning_mac.mm qtoolbartabdialog_mac.mm

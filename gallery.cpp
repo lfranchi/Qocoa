@@ -8,6 +8,8 @@
 #include <QPushButton>
 #include <QDebug>
 #include <QListWidget>
+#include <QGroupBox>
+#include <QLineEdit>
 
 #include "qsearchfield.h"
 #include "qbutton.h"
@@ -107,12 +109,16 @@ void Gallery::showTabToolbarWidget() {
         textEdit->setText("This is some text!");
         m_toolbarTabDialog->addTab(textEdit, QPixmap( ":/bookmarks.png" ), "Text", "Some text editing eh?");
 
+        QGroupBox* groupBox = new QGroupBox;
+        groupBox->setLayout(new QVBoxLayout);
+        groupBox->layout()->addWidget(new QLineEdit());
         QListWidget* lw = new QListWidget;
         for (int i = 0; i < 30; ++i) {
             lw->addItem("1213123123 12 21 2 2 " + i);
         }
-        m_toolbarTabDialog->addTab(lw, QPixmap( ":/user-home.png" ), "List", "Some lists!" );
-
+        groupBox->layout()->addWidget(lw);
+        m_toolbarTabDialog->addTab(groupBox, QPixmap( ":/user-home.png" ), "List", "Some lists!" );
+        
         m_toolbarTabDialog->setCurrentIndex(0);
     }
     
@@ -122,11 +128,9 @@ void Gallery::showTabToolbarWidget() {
 void Gallery::tabToolbarWidgetAccepted() {
     m_toolbarTabDialog->deleteLater();
     m_toolbarTabDialog = 0;
-    qDebug() << "accepted!";
 }
 
 void Gallery::tabToolbarWidgetRejected() {
 //    delete m_toolbarTabDialog;
 //    m_toolbarTabDialog = 0;
-    qDebug() << "Rejected!";
 }
