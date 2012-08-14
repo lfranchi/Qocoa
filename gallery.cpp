@@ -118,6 +118,12 @@ void Gallery::showTabToolbarWidget() {
         }
         groupBox->layout()->addWidget(lw);
         m_toolbarTabDialog->addTab(groupBox, QPixmap( ":/user-home.png" ), "List", "Some lists!" );
+
+        QLineEdit* lineEdit = new QLineEdit;
+        m_toolbarTabDialog->addTab(lineEdit, QPixmap(":/user-home.png"), "LineEdit", "eh?");
+
+        QLineEdit* lineEdit2 = new QLineEdit;
+        m_toolbarTabDialog->addTab(lineEdit2, QPixmap(":/user-home.png"), "LineEdit2", "eh?");
         
         m_toolbarTabDialog->setCurrentIndex(0);
     }

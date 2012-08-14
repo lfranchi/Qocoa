@@ -65,37 +65,6 @@ CGFloat ToolbarHeightForWindow(NSWindow *window)
 
 };
 
-/**
- A swizzler that works for both methods that are already defined in a subclass, and methods that are inherited
- from a superclass.
- 
- Also known as 'the Ballard method'
- */
-@interface NSObject (Swizzler)
-+(void)swizzle:(Class)theClass origMethod:(SEL)method toClass:(Class)newClass withMethod:(SEL)altSel;
-@end
-
-@implementation NSObject (Swizzler)
-
-+(void)swizzle:(Class)theClass origMethod:(SEL)method toClass:(Class)newClass  withMethod:(SEL)altSel
-{
-    Method origMethod = class_getInstanceMethod(theClass, method);
-    Method altMethod = class_getInstanceMethod(newClass, altSel);
-    
-    class_addMethod(theClass,
-                    method,
-                    class_getMethodImplementation(theClass, method),
-                    method_getTypeEncoding(origMethod));
-    class_addMethod(theClass,
-                    altSel,
-                    class_getMethodImplementation(newClass, altSel),
-                    method_getTypeEncoding(altMethod));
-    
-    method_exchangeImplementations(class_getInstanceMethod(theClass, method), class_getInstanceMethod(newClass, altSel));
-}
-
-@end
-
 @interface ToolbarDelegate : NSObject<NSToolbarDelegate, NSWindowDelegate>
 {
     QToolbarTabDialogPrivate *pimpl;
@@ -373,78 +342,6 @@ public:
     pimpl->emitAccepted();
 }
 
-/**
- HACK ALERT
- 
- This method hijacks the QCocoaView -(BOOL)acceptsFirstResponder method defined in
- qcocoaview_mac.mm:829.
- 
- Per QTBUG-11401 and the attached patch there, there is a bug with alien widgets on Qt/Mac
- where the acceptsFirstResponder method returns YES/NO based on its own focus policy instead of
- the child's.
- 
- In order to fix this, we swap out the buggy method with our own that unconditionally returns YES
- for the widget if we are running with Alien widgets. 
- 
- See https://github.com/Mendeley/Qt/commit/90c330a7389b2cfae907b64daf8268c22257301e for more information.
- 
- */
--(BOOL)acceptsFirstResponder
-{
-    // this works because we have been swizzled to be a member of
-    // QCocoaView, where qt_widget is defined as -(QWidget*)qt_qwidget
-    // at qcocoaview_mac.mm:913
-    QWidget* qwidget = (QWidget*)[self qt_qwidget];
-    
-    if (!qwidget)
-        return NO;
-    
-    // The following code comes from QCocoaView's acceptsFirstResponder
-
-    // Disabled widget shouldn't get focus even if it's a window.
-    // hence disabled windows will not get any key or mouse events.
-    if (!qwidget->isEnabled())
-        return NO;
-
-    
-    // Added check for alien widgets. If found, return unconditional YES
-    if (!QApplication::testAttribute(Qt::AA_NativeWindows)) {
-        return YES;
-    }
-    
-    // The following code comes from QCocoaView's acceptsFirstResponder
-    if (qwidget->isWindow()/* && !qt_widget_private(qwidget)->topData()->embedded*/) {
-        QWidget *focusWidget = qApp->focusWidget();
-        if (!focusWidget) {
-            // There is no focus widget, but we still want to receive key events
-            // for shortcut handling etc. So we accept first responer for the
-            // content view as a last resort:
-            return YES;
-        }
-        if (!focusWidget->internalWinId() && focusWidget->nativeParentWidget() == qwidget) {
-            // The current focus widget is alien, and hence, cannot get acceptsFirstResponder
-            // calls. Since the focus widget is a child of qwidget, we let this view say YES:
-            return YES;
-        }
-        if (focusWidget->window() != qwidget) {
-            // The current focus widget is in another window. Since cocoa
-            // suggest that this window should be key now, we accept:
-            return YES;
-        }
-    }
-    
-    return qwidget->focusPolicy() != Qt::NoFocus;
-}
-
-/**
- This is also a swizzled method to add a needsPanelToBecomeKey returning YES
- as QCocoaView must implement it in order to allow keyboard input.
- */
--(BOOL)needsPanelToBecomeKey
-{
-    return YES;
-}
-
 @end
 
 QToolbarTabDialog::QToolbarTabDialog() :
@@ -508,11 +405,6 @@ void QToolbarTabDialog::addTab(QWidget* page, const QPixmap& icon, const QString
     NSView *nativeView = reinterpret_cast<NSView*>(nativeWidget->winId());
     [nativeView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [nativeView setAutoresizesSubviews:YES];
-    
-    // Swap QCocoaView's acceptsFirstResponder for ours, to workaround a bug (QTBUG-11401-related).
-    // See comment on acceptsFirstResponder for more information
-    [NSObject swizzle:[nativeView class] origMethod:@selector(acceptsFirstResponder) toClass:[pimpl->toolBarDelegate class] withMethod:@selector(acceptsFirstResponder)];
-    [NSObject swizzle:[nativeView class] origMethod:@selector(needsPanelToBecomeKey) toClass:[pimpl->toolBarDelegate class] withMethod:@selector(needsPanelToBecomeKey)];
     
     pimpl->minimumWidth = qMax(pimpl->minimumWidth, page->sizeHint().width());
     
